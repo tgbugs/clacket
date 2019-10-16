@@ -74,7 +74,7 @@
         (otherwise (values))))))
 
 ;; enable
-(defun enable-racket-reader ()
+(defun enable-clacket ()
   ;; #lang -> (values)
   (set-dispatch-macro-character #\# #\l #'racket-lang-line)
   ;; [] -> ()

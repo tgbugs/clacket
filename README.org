@@ -1,0 +1,75 @@
+* datum comments for common lisp
+[[img:https://travis-ci.org/tgbugs/datum-comments.svg?branch=master][https://travis-ci.org/tgbugs/datum-comments]]
+Racket style =#;= comments implemented as a dispatch macro.
+
+#+begin_src lisp
+#; ; regular comments are treated as whitespace
+(and the next datum is skipped by the reader)
+#; (so you can skip a datum inline) (print "and not just a line or block")
+#+end_src
+
+* Installation
+** [[https://www.quicklisp.org/][Quicklisp]]
+#+begin_src lisp
+(ql:quickload :datum-comments)
+#;(skip) '(show)  ; datum comments work immediately after quickload
+#+end_src
+
+** Manual install
+Using =sbcl= as an example.
+#+begin_src bash
+git clone https://github.com/tgbugs/datum-comments.git
+cat "(push (truename #p\"datum-comments\") asdf:*central-registry*)" >> ~/.sbclrc
+sbcl --eval "(asdf:load-system :datum-comments) #;(i im a comment) (print 'hello)"
+#+end_src
+
+* Usage
+Since comments are a fundamental part of a language datum-comments automatically
+registers itself as a dispatch macro for the =#;= symbol. Install via one of the
+methods above and then include =:datum-comments= in the =:use= section of
+=defpackage= where you want to be able to use datum comments, e.g. as
+
+#+begin_src lisp
+(defpackage :my-package
+  (:use :cl :datum-comments))
+#+end_src
+
+at which point you can =#;(use datum comments to your heart's content)=
+
+* Implementation support
+This should work on any cl that has =asdf=, and the copy/paste version
+below should work on pretty much anything.
+See [[https://travis-ci.org/tgbugs/datum-comments][travis]] for the list
+of tested working implementations.
+
+* Standalone
+#+begin_src lisp
+(defpackage :datum-comments
+  (:use :cl))
+(in-package :datum-comments)
+(defun datum-comment (stream char arg)
+  (declare (ignore char arg))
+  (read-preserving-whitespace stream t nil t)
+  (values))
+(set-dispatch-macro-character #\# #\; #'datum-comment)
+#+end_src
+
+* Syntax highlighting and editing
+If you are using emacs you can add the following hook to =~/.emacs=.
+The approach is lifted straight from [[https://github.com/greghendershott/racket-mode][racket-mode]].
+Highlighting as =#;= with font lock isn't quite working yet.
+#+begin_src emacs-lisp
+;;; lisp datum comment support
+(defun lisp-syntax-propertize-function (start end)
+  (goto-char start)
+  (funcall
+   (syntax-propertize-rules
+    ((rx "#;")
+     (0 "'")))
+   (point)
+   end))
+(defun lisp-custom ()
+  (setq-local syntax-propertize-function #'lisp-syntax-propertize-function)
+  (syntax-propertize (point-max)))
+(add-hook 'lisp-mode-hook #'lisp-custom)
+#+end_src

@@ -1,4 +1,4 @@
-(in-package :racket-reader)
+(in-package :clacket)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (enable-racket-reader))
+  (enable-clacket))

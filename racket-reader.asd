@@ -1,11 +1,11 @@
 (in-package :cl-user)
 
-(defpackage :racket-reader-asd
+(defpackage :clacket-asd
   (:use :cl :asdf))
 
-(in-package :racket-reader-asd)
+(in-package :clacket-asd)
 
-(defsystem :racket-reader
+(defsystem :clacket
   :version "0.0.1"
   :author "Tom Gillespie <tgbugs@gmail.com>"
   :license "Public Domain (Unlicense)"
@@ -16,14 +16,14 @@
                (:file "read")
                (:file "enable")))
 
-(defsystem :racket-reader-test
-  :depends-on (:racket-reader)
+(defsystem :clacket-test
+  :depends-on (:clacket)
   :components ((:module "test"
                         :serial t
                         :components ((:file "packages")
                                      (:file "tests")))))
 
 ;; tell the system where to find
-(defmethod perform ((o test-op) (c (eql (find-system :racket-reader))))
-  (operate 'load-op :racket-reader-test)
-  (funcall (intern (symbol-name :run-all-tests) (find-package :racket-reader-test))))
+(defmethod perform ((o test-op) (c (eql (find-system :clacket))))
+  (operate 'load-op :clacket-test)
+  (funcall (intern (symbol-name :run-all-tests) (find-package :clacket-test))))

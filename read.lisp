@@ -1,4 +1,4 @@
-(in-package :racket-reader)
+(in-package :clacket)
 
 ;; lang line
 (defun racket-lang-line (stream char arg)
@@ -22,11 +22,11 @@
 
 ;; wow ... not kidding it is easy
 ;; https://stackoverflow.com/questions/1988/how-far-can-lisp-macros-go
-(defun right-square-bracket-reader (s c)
+(defun right-square-bclacket (s c)
   (declare (ignore c))
   (read-delimited-list #\] s t))
 
-(defun right-curly-bracket-reader (s c)
+(defun right-curly-bclacket (s c)
   (declare (ignore c))
   (read-delimited-list #\} s t))
 
@@ -74,14 +74,14 @@
         (otherwise (values))))))
 
 ;; enable
-(defun enable-racket-reader ()
+(defun enable-clacket ()
   ;; #lang -> (values)
   (set-dispatch-macro-character #\# #\l #'racket-lang-line)
   ;; [] -> ()
-  (set-macro-character #\[ #'right-square-bracket-reader)
+  (set-macro-character #\[ #'right-square-bclacket)
   (set-syntax-from-char #\] #\))
   ;; {} -> ()
-  (set-macro-character #\{ #'right-curly-bracket-reader)
+  (set-macro-character #\{ #'right-curly-bclacket)
   (set-syntax-from-char #\} #\))
   ;; #' -> '
   (set-dispatch-macro-character #\# #\' #'read-syntax)

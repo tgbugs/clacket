@@ -1,4 +1,4 @@
-(in-package :racket-reader-test)
+(in-package :clacket-test)
 
 #lang not actually racket
 

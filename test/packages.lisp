@@ -1,4 +1,4 @@
 (in-package :cl-user)
-(defpackage :racket-reader-test
-  (:use :cl :racket-reader)
+(defpackage :clacket-test
+  (:use :cl :clacket)
   (:export :run-all-tests))

@@ -1,5 +1,5 @@
 (in-package :cl-user)
-(defpackage :racket-reader
+(defpackage :clacket
   (:use :cl)
   (:nicknames :rkt)
   (:export

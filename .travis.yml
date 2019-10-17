@@ -1,0 +1,18 @@
+language: common-lisp
+sudo: required
+
+env:
+  matrix:
+    - LISP=abcl
+    - LISP=ccl
+    #- LISP=clasp  # takes took long to build
+    - LISP=clisp
+    - LISP=cmucl
+    - LISP=ecl
+    - LISP=sbcl
+
+install:
+  - curl -L https://raw.githubusercontent.com/roswell/roswell/release/scripts/install-for-ci.sh | sh  # XXX bad
+
+script:
+  - bin/run-tests

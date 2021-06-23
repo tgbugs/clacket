@@ -14,16 +14,13 @@
   :depends-on (:datum-comments)
   :components ((:file "packages")
                (:file "read")
-               (:file "enable")))
+               (:file "enable"))
+  :in-order-to ((test-op (test-op :clacket/test))))
 
-(defsystem :clacket-test
+(defsystem :clacket/test
   :depends-on (:clacket)
   :components ((:module "test"
                         :serial t
                         :components ((:file "packages")
-                                     (:file "tests")))))
-
-;; tell the system where to find
-(defmethod perform ((o test-op) (c (eql (find-system :clacket))))
-  (operate 'load-op :clacket-test)
-  (funcall (intern (symbol-name :run-all-tests) (find-package :clacket-test))))
+                                     (:file "tests"))))
+  :perform (test-op (o c) (uiop:symbol-call :clacket/test :run-all-tests)))

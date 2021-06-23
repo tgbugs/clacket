@@ -5,4 +5,5 @@
   (:export
    #:define
    #:read-rkt
-   #:read-rkt-file))
+   #:read-rkt-file
+   #:enable-clacket))

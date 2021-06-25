@@ -23,9 +23,58 @@
                     (eql space #\space)))
       (error (format nil "this macro should always be #lang ? but is ~a instead"
                      (uiop:strcat l a n g space)))))
-  (read-line stream t nil t)
   ; FIXME technically this becomes the module reader
-  (values))
+  ; TODO should also set the package that we intern into probably since modules are conflated with files
+  (let* ((ll (read-line stream t nil t))
+         (is (make-string-input-stream ll))
+         (lr (symbol-name (read is)))
+         (losing-it (string= lr "at-exp")))
+    #+()
+    (format t "lang-line-value: ~s ~s ~s~%" ll lr losing-it #+()(string= lr "at-exp"))
+    (if losing-it ;(string= lr "at-exp") ; for reasons of symbol intering I link just (read is) won't work
+        (progn
+          #+()
+          (format t "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA~%")
+        ;; FIXME apparently if a signal is not caught stuff just keeps running ? kind of owrrying
+               ;; NOTE use error instead of signal so that it will fail if there is nothing listening for the signal?
+          (error 'lat))
+        (values))))
+
+(defun racket-dis-h (stream char arg)
+  (declare (ignore arg))
+  #+()
+  (invoke-debugger (make-condition 'simple-error))
+  (let ((hash-type (let* ((h char)
+                          (a (read-char stream))
+                          (s (read-char stream))
+                          (h2 (read-char stream))
+                          (e (peek-char nil stream)))
+                                        ;(format t "char: ~s~%" char)
+                     (when (not (and
+                                 #+(or sbcl ccl)
+                                 (eql h #\H) ; I think there is a bug in SBCL where setting readtable-case fails?
+                                 #-(or sbcl ccl)
+                                 (eql h #\h)  ; use this reader case preserving? except that somehow still #\L in ccl?
+                                 (eql a #\a)
+                                 (eql s #\s)
+                                 (eql h2 #\h)))
+                       (error (format nil "this macro should always be #hash ? but is ~a instead"
+                                      (uiop:strcat h a s h2))))
+                     (if (eq e #\e)
+                         (let* ((e (read-char stream))
+                                (q (read-char stream))
+                                (v (peek-char nil stream)))
+                           (when (not (eq q #\q))
+                             (error (format nil "q is not #\\q it is ~a instead" q)))
+                           (if (eq v #\v)
+                               (let ((v (read-char stream)))
+                                 '|#%hasheqv|
+                                 )
+                               '|#%hasheq|))
+                         '|#%hash|))))
+    ;; technically incorrect since #hash () isn't currently allowed
+    ;; FIXME this should somehow convert to reading a hash table
+    (list hash-type (read stream))))
 
 (defun racket-dis-p (stream char arg)
   (declare (ignore arg))
@@ -57,12 +106,6 @@
   ;; sort out the error handling later, racket uses a contract, also #px#"byte string" is a thing
   `(regexp ,(read stream)))
 
-#+()
-(in-package :clacket)
-
-#+()
-(in-package :cl-user)
-
 ;; wow ... not kidding it is easy
 ;; https://stackoverflow.com/questions/1988/how-far-can-lisp-macros-go
 (defun right-square-bracket-reader (s c)
@@ -91,16 +134,48 @@
   ; FIXME not quite right need to swap quote with syntax
   `(|syntax| ,(funcall (get-macro-character #\') s c)))
 
+(defparameter *syntax-stack* '()) ; see backquote.lisp `ccl::*backquote-stack*'
+
 (defun read-quasisyntax (s c a)
   (declare (ignore a))
   ; FIXME not quite right need to swap quote with syntax
-  `(|quasisyntax| ,(funcall (get-macro-character #\`) s c)))
+  `(|quasisyntax| ,
+    (funcall (get-macro-character #\`) s c)
+    #+() ; FIXME this works but interactions between syntax and quote are a problem
+    (let ((ccl::*backquote-stack* *syntax-stack*))
+      (funcall (get-macro-character #\`) s c))))
+
+(defun read-unsyntax (s c a) ; also reads unsyntax splicing
+  (declare (ignore a))
+  ; FIXME not quite right need to swap quote with syntax
+  (let* ((at? (peek-char nil s))
+         (name (if (eq at? #\@) ; in ccl splicing is handled as part of |, reader|
+                   '|unsyntax-splicing|
+                   '|unsyntax|)))
+    (list name
+          (funcall (get-macro-character #\,) s c)
+          #+()
+          (let ((ccl::*backquote-stack* *syntax-stack*))
+            (funcall (get-macro-character #\,) s c)))))
 
 (defun read-box (s c a)
   (declare (ignore c a))
-  `(|box| ,(read s))
+  `(|box| ,(read s)))
 
-  )
+(defun read-bytes (s c a)
+  ; FIXME this is totally incorrect
+  (declare (ignore a))
+  `(|bytes| ,(ccl::read-string s c)))
+
+(defun read-exact (s c a)
+  ; FIXME FIXME obviously this is incorrect
+  (declare (ignore c a))
+  `(|exact| ,(read s)))
+
+(defun read-inexact (s c a)
+  ; FIXME FIXME obviously this is incorrect
+  (declare (ignore c a))
+  `(|inexact| ,(read s)))
 
 ;; comments
 (defun datum-comment (stream char arg)
@@ -117,57 +192,37 @@
 
 #+ccl
 (defun handle-rkt-pkg (condition)
-  ;;(format nil "error: ~a" condition)
-  #+()
-  (defpackage #'thing)
-  #+()
-  (invoke-restart 'unintern)
-  #+()
-  (invoke-restart 'ccl::make-nickname)
-
   (let* ((package-name (slot-value condition 'package))
-         ;;#+()
          (package-keyword (when package-name (intern package-name 'keyword))))
-    #+() ; so this doesn't work ... so we have to do something evil
-    (CCL::%DEFPACKAGE package-name '(:USE :CL))
     (if package-name
         (progn
-          (eval `(defpackage ,package-keyword (:use :cl)))
+          (eval `(defpackage ,package-keyword (:use :cl))) ; XXX evil
           (invoke-restart 'use-value package-name))
-        (signal 'error)
-        )
+        (signal 'error))))
 
-    ;;(signal 'stahp)
-    ;;(invoke-restart 'continue)
-    ;; XXX ARGH it already read the whole name by this point >_<
-    ;;(invoke-restart 'ccl-unintern package-name)
-    ;;(invoke-restart 'use-value package-keyword)
-
-    ;; yeah .. this stack overflow is pretty gnarley crashes ccl entirely
-
-    )
-  )
-
-(defun asdfasdf (condition)
+(defun handle-simple-error (condition)
   (let* ((fa (slot-value condition 'ccl::format-arguments))
          (fc (slot-value condition 'ccl::format-control))
          (name (car fa))
          (package (cadr fa)))
     ; TODO if string prefix Reader error:
     ; illegal symbol error will hit us with symbol: because the symbol name is empty
-    (cond ((or (string= fc "Reader error: Illegal symbol syntax.")
-               (string= (subseq fc 0 4) "oops"))
+    (cond ((string= fc "Reader error: Illegal symbol syntax.")
            ;;(invoke-restart 'cl-user::please-continue)
-           (signal 'sigh) ; so the ccl error has no way to recover here because nothing is included in the error
+           (signal 'iss) ; so the ccl error has no way to recover here because nothing is included in the error
            #+()
            (make-symbol (concatenate 'string (package-name package) ":")))
+          ((string= (subseq fc 0 4) "oops") (signal 'sigh))
+          ((string= (subseq fc (- (length fc) 9) (length fc)) "backquote") (signal 'cnib))
           ((packagep package)
            (make-symbol (concatenate 'string (package-name package) ":" (if name name "")))
            ;; FIXME return value?
            (invoke-restart 'continue))
-          (t (format t "asdfasdf package: ~s ~s~%" package condition) (signal 'sigh))
-          )))
+          (t #+()(format t "handle-simple-error package: ~s ~s~%" package condition) (signal 'sigh)))))
 
+(define-condition lat (condition) ())
+(define-condition iss (condition) ())
+(define-condition cnib (condition) ())
 (define-condition sigh (condition) ())
 (define-condition yeah-yeah-yeah (error) ())
 
@@ -185,7 +240,7 @@
          (ccl::simple-reader-error (lambda (c) c (signal 'yeah-yeah-yeah)))
          (ccl::cant-construct-arglist (lambda (c) ; probably lang-at exp which we can handle w/ another readable but only once we implement the readline
                                         c (signal 'sigh)))
-         (simple-error #'asdfasdf #+()(lambda (c) c (signal 'error)))
+         (simple-error #'handle-simple-error #+()(lambda (c) c (signal 'error)))
          ;;(ccl::inactive-restart ())
          ;;(ccl::simple-reader-error (lambda (c) (throw c)))
          #+()
@@ -233,7 +288,7 @@
                  (read-rkt in eof-sym)))
           ((eq expr eof-sym))
         (setf out (cons expr out))
-        #+() ; for debug
+        #+debug ; for debug
         (progn
           (pprint expr)
           (format t "~%"))
@@ -277,30 +332,6 @@
 
 ;;; XXX FIXME yeah ... so we basically have to reimplement all of read-list
 
-#+() ; sbcl
-(defun sb-impl::read-after-dot (stream firstchar collectp)
-  ;; FIRSTCHAR is non-whitespace!
-  (let ((lastobj ()))
-    (do ((char firstchar (sb-impl::flush-whitespace stream)))
-        ((eq char #\))
-         (if (zerop collectp)
-             (return-from sb-impl::read-after-dot nil)
-             (sb-impl::simple-reader-error stream "Nothing appears after . in list.")))
-      ;; See whether there's something there.
-      (multiple-value-bind (winp obj) (sb-impl::read-maybe-nothing stream char)
-        (unless (zerop winp) (return (setq lastobj obj)))))
-    ;; At least one thing appears after the dot.
-    ;; Check for more than one thing following dot.
-    (loop
-     (let ((char (sb-impl::flush-whitespace stream)))
-       (cond ((eq char #\)) (return lastobj)) ;success!
-             ;; Try reading virtual whitespace.
-             ((eq firstchar #\.) (return lastobj)) ; racket elip helper XXX totally broken
-             ((not (zerop (logand (sb-impl::read-maybe-nothing stream char)
-                                  (sb-impl::truly-the fixnum collectp))))
-              (sb-impl::simple-reader-error
-               stream "More than one object follows . in list.")))))))
-
 (defvar |...| 'elipsis-zero-or-more)
 
 (defvar |...+| 'elipsis-one-or-more)
@@ -336,11 +367,30 @@
   (intern
    (concatenate 'string "#" (string c) (symbol-name (read s)))))
 
+(defun read-kw (s c a)
+  (declare (ignore c a))
+  (let* ((v (read s))
+         (rv (if (numberp v)
+                 (make-symbol (format nil "~s" v)) ; FIXME a horrible hack ...
+                 v)))
+    (intern (symbol-name rv) 'keyword)))
+
+(defun read-struct (s c a)
+  (declare (ignore c a))
+  `(|#%struct| ,(read s)))
+
 ;; enable
 (defun enable-clacket ()
+  ;; case
   (setf (readtable-case *readtable*) :preserve) ; FIXME it seems that this does not stick in sbcl?
+
+  ;; chars
+  (ccl::register-character-name "vtab" #\PageUp) ; apparently this is #\u0B aka #\u+0B aka line tabulation
+
   ;; #lang -> (values)
   (set-dispatch-macro-character #\# #\l #'racket-lang-line)
+  ;; #hash -> ?????????????
+  (set-dispatch-macro-character #\# #\h #'racket-dis-h)
   ;; [] -> ()
   (set-macro-character #\[ #'right-square-bracket-reader)
   (set-syntax-from-char #\] #\))
@@ -355,12 +405,16 @@
   (set-macro-character #\. #'read-elip) ; FIXME doesn't seem to catch does in lists?
   ;; #; -> #+() effectively
   (set-dispatch-macro-character #\# #\; #'datum-comment)
+  ;; #" -> bytes
+  (set-dispatch-macro-character #\# #\" #'read-bytes)
   ;; #' -> '
   (set-dispatch-macro-character #\# #\' #'read-syntax)
   ;; #` -> `
   (set-dispatch-macro-character #\# #\` #'read-quasisyntax)
+  ;; #, -> ,
+  (set-dispatch-macro-character #\# #\, #'read-unsyntax)
   ;; #: -> :
-  (set-dispatch-macro-character #\# #\: (lambda (s c a) (declare (ignore c a)) (intern (symbol-name (read s)) 'keyword)))
+  (set-dispatch-macro-character #\# #\: #'read-kw)
   ;; #t -> t
   (set-dispatch-macro-character #\# #\t (lambda (s c a) (declare (ignore s c a)) t))
   ;; #f -> nil
@@ -373,6 +427,12 @@
   (set-dispatch-macro-character #\# #\- #'read-symbol)
   ;; #% -> symbol
   (set-dispatch-macro-character #\# #\% #'read-symbol)
+  ;; #e -> exact
+  (set-dispatch-macro-character #\# #\e #'read-exact)
+  ;; #i -> inexact
+  (set-dispatch-macro-character #\# #\i #'read-inexact)
+  ;; #s -> struct
+  (set-dispatch-macro-character #\# #\s #'read-struct)
 
   (set-dispatch-macro-character #\# #\[ (get-dispatch-macro-character #\# #\()) ; FIXME not right? I mean technically yes ...
   (set-dispatch-macro-character #\# #\{ (get-dispatch-macro-character #\# #\()) ; FIXME not right? I mean technically yes ...
@@ -384,3 +444,4 @@
   #+()
   (setf (symbol-function 'read) #'read-rkt-all)
   (values))
+
